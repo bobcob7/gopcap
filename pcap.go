@@ -46,6 +46,7 @@ type Interface struct {
 type IFAddress struct {
 	IP      net.IP
 	Netmask net.IPMask
+	Broadcast net.IPMask
 	// TODO: add broadcast + PtP dst ?
 }
 
@@ -222,8 +223,13 @@ func findalladdresses(addresses *_Ctype_struct_pcap_addr) (retval []IFAddress) {
 		if a.IP, err = sockaddr_to_IP((*syscall.RawSockaddr)(unsafe.Pointer(curaddr.addr))); err != nil {
 			continue
 		}
-		if a.Netmask, err = sockaddr_to_IP((*syscall.RawSockaddr)(unsafe.Pointer(curaddr.addr))); err != nil {
+		if a.Netmask, err = sockaddr_to_IP((*syscall.RawSockaddr)(unsafe.Pointer(curaddr.netmask))); err != nil {
 			continue
+		}
+		if curaddr.broadaddr != nil {
+			if a.Broadcast, err = sockaddr_to_IP((*syscall.RawSockaddr)(unsafe.Pointer(curaddr.broadaddr))); err != nil {
+				continue
+			}
 		}
 		retval = append(retval, a)
 	}
