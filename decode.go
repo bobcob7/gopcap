@@ -18,6 +18,7 @@ const (
 	IP_INIP = 4
 	IP_TCP  = 6
 	IP_UDP  = 17
+	IP_GRE  = 47
 )
 
 const (
@@ -74,15 +75,18 @@ func (p *Packet) Decode() {
 	if len(p.Data) <= 14 {
 		return
 	}
+	p.Payload = p.Data
 
-	p.Type = int(binary.BigEndian.Uint16(p.Data[12:14]))
-	p.DestMac = decodemac(p.Data[0:6])
-	p.SrcMac = decodemac(p.Data[6:12])
+	p.decodeEther()
+}
 
-	if len(p.Data) >= 15 {
-		p.Payload = p.Data[14:]
+func (p *Packet) decodeEther() {
+	p.Type = int(binary.BigEndian.Uint16(p.Payload[12:14]))
+	p.DestMac = decodemac(p.Payload[0:6])
+	p.SrcMac = decodemac(p.Payload[6:12])
+	if len(p.Payload) >= 15 {
+		p.Payload = p.Payload[14:]
 	}
-
 	switch p.Type {
 	case TYPE_IP:
 		p.decodeIp()
@@ -256,6 +260,8 @@ func (p *Packet) decodeIp() {
 		p.decodeUdp()
 	case IP_ICMP:
 		p.decodeIcmp()
+	case IP_GRE:
+		p.decodeGre()
 	case IP_INIP:
 		p.decodeIp()
 	}
@@ -316,6 +322,20 @@ type Tcphdr struct {
 	Data       []byte
 }
 
+type Grehdr struct {
+	ChecksumBit bool
+	KeyBit bool
+	RoutingBit bool
+	SequenceBit bool
+	Reserved0 uint8
+	Version uint8
+	Type uint16
+	Checksum uint16
+	Reserved1 uint16
+	Key uint32
+	SequenceNumber uint32
+}
+
 const (
 	TCP_FIN = 1 << iota
 	TCP_SYN
@@ -349,6 +369,56 @@ func (p *Packet) decodeTcp() {
 	}
 	p.Headers = append(p.Headers, tcp)
 	p.TCP = tcp
+}
+
+func i16tob(i uint16) bool {
+	if i > 0 {
+		return true
+	}
+	return false
+}
+
+func Btob(i byte) bool {
+	if i > 0 {
+		return true
+	}
+	return false
+}
+
+func (p *Packet) decodeGre() {
+	if len(p.Payload) < 4 {
+		return
+	}
+
+	pkt := p.Payload
+	gre := new(Grehdr)
+	gre.ChecksumBit = Btob(pkt[0] & 128)
+	gre.RoutingBit = Btob(pkt[0] & 64)
+	gre.KeyBit = Btob(pkt[0] & 32)
+	gre.SequenceBit = Btob(pkt[0] & 16)
+	gre.Reserved0 = uint8(pkt[1] & 0xf8)
+	gre.Version = uint8(pkt[1] & 0x07)
+	gre.Type = binary.BigEndian.Uint16(pkt[2:4])
+	p.Payload = p.Payload[4:]
+	if len(p.Payload) > 0  && gre.ChecksumBit {
+		gre.Checksum = binary.BigEndian.Uint16(pkt[4:6])
+		gre.Reserved1 = binary.BigEndian.Uint16(pkt[6:8])
+		p.Payload = p.Payload[4:]
+	}
+	if len(p.Payload) > 7 && gre.KeyBit{
+		gre.Key = binary.BigEndian.Uint32(pkt[8:12])
+		p.Payload = p.Payload[4:]
+	}
+	if len(p.Payload) > 8 && gre.SequenceBit {
+		gre.SequenceNumber = binary.BigEndian.Uint32(pkt[12:16])
+		p.Payload = p.Payload[4:]
+	}
+	p.Headers = append(p.Headers, gre)
+	p.GRE = gre
+	if gre.Type == 0x6558 {
+		fmt.Println("Decoding Ether again...")
+		p.decodeEther()
+	}
 }
 
 func (tcp *Tcphdr) String(hdr addrHdr) string {

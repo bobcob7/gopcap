@@ -49,6 +49,7 @@ type Packet struct {
 	IP  *Iphdr  // IP header (for IP packets, after decoding)
 	TCP *Tcphdr // TCP header (for TCP packets, after decoding)
 	UDP *Udphdr // UDP header (for UDP packets after decoding)
+	GRE *Grehdr // GRE header (for GRE packets after decoding)
 }
 
 // Reader parses pcap files.
