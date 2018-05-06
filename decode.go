@@ -416,7 +416,6 @@ func (p *Packet) decodeGre() {
 	p.Headers = append(p.Headers, gre)
 	p.GRE = gre
 	if gre.Type == 0x6558 {
-		fmt.Println("Decoding Ether again...")
 		p.decodeEther()
 	}
 }
