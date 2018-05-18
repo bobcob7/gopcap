@@ -51,9 +51,9 @@ type IFAddress struct {
 	// TODO: add broadcast + PtP dst ?
 }
 
-func (p *Pcap) Next() (pkt *Packet) {
-	rv, _ := p.NextEx()
-	return rv
+func (p *Pcap) Next() (pkt *Packet, result int32) {
+	rv, rs := p.NextEx()
+	return rv, rs
 }
 
 // Openlive opens a device and returns a *Pcap handler
